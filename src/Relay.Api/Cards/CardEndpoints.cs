@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Relay.Api.Auth;
 using Relay.Api.Cards.Commands;
+using Relay.Shared.Cards;
 
 namespace Relay.Api.Cards;
 
@@ -81,11 +82,11 @@ public static class CardEndpoints
 
     private static async Task<IResult> Move(
         Guid id,
-        MoveCardCommand command,
+        MoveCardRequest request,
         MoveCardHandler handler,
         CancellationToken cancellationToken)
     {
-        var result = await handler.Handle(id, command, cancellationToken);
+        var result = await handler.Handle(id, request, cancellationToken);
 
         return result switch
         {

@@ -42,6 +42,6 @@ Card writes do not broadcast. SignalR is a later step. The move response already
 
 ## Shared contracts
 
-`RegisterRequest`, `LoginResponse`, `UserResponse`, `CreateBoardRequest`, and the board response records live in `Relay.Shared`. The Blazor client serializes those same shapes. Card move requests stay in the API until the client sends them. `docs/data-model.md` is the entity diagram for the board tables.
+`RegisterRequest`, `LoginResponse`, `UserResponse`, `CreateBoardRequest`, `MoveCardRequest`, and the board response records live in `Relay.Shared`. The Blazor client serializes those same shapes. `docs/data-model.md` is the entity diagram for the board tables.
 
 The client stores the JWT in `localStorage` under `relay.token` and attaches it as a bearer token. A signed-out visit to `/` or `/boards/{id}` goes to `/login` with a return URL.

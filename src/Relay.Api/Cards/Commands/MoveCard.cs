@@ -1,18 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Relay.Api.Data;
 using Relay.Api.Data.Entities;
+using Relay.Shared.Cards;
 
 namespace Relay.Api.Cards.Commands;
-
-public sealed record MoveCardCommand(Guid ColumnId, int Order);
-
-public sealed record CardOrderResponse(Guid CardId, Guid ColumnId, int Order);
-
-public sealed record MoveCardResponse(
-    Guid CardId,
-    Guid FromColumnId,
-    Guid ToColumnId,
-    IReadOnlyList<CardOrderResponse> Orders);
 
 public abstract record MoveCardResult
 {
@@ -27,7 +18,7 @@ public sealed class MoveCardHandler(AppDbContext db)
 {
     public async Task<MoveCardResult> Handle(
         Guid cardId,
-        MoveCardCommand command,
+        MoveCardRequest request,
         CancellationToken cancellationToken)
     {
         var card = await db.Cards
@@ -40,7 +31,7 @@ public sealed class MoveCardHandler(AppDbContext db)
         }
 
         var target = await db.Columns
-            .FirstOrDefaultAsync(column => column.Id == command.ColumnId, cancellationToken);
+            .FirstOrDefaultAsync(column => column.Id == request.ColumnId, cancellationToken);
 
         if (target is null)
         {
@@ -69,7 +60,7 @@ public sealed class MoveCardHandler(AppDbContext db)
             card.ColumnId = target.Id;
         }
 
-        var index = Math.Clamp(command.Order, 0, targetCards.Count);
+        var index = Math.Clamp(request.Order, 0, targetCards.Count);
         targetCards.Insert(index, card);
         card.UpdatedAt = DateTimeOffset.UtcNow;
 

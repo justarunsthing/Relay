@@ -1,7 +1,10 @@
 @page "/boards/{Id:guid}"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IAsyncDisposable
 @inject HttpClient Http
+@inject IJSRuntime JS
 @using Relay.Shared.Boards
+@using Relay.Shared.Cards
 
 <PageTitle>@(board?.Name ?? "Board")</PageTitle>
 
@@ -10,10 +13,10 @@
     <h1>Board</h1>
     <p class="status">This board was not found.</p>
 }
-else if (!string.IsNullOrEmpty(error))
+else if (!string.IsNullOrEmpty(loadError))
 {
     <h1>Board</h1>
-    <p class="error" role="alert">@error</p>
+    <p class="error" role="alert">@loadError</p>
 }
 else if (board is null)
 {
@@ -23,31 +26,30 @@ else if (board is null)
 else
 {
     <h1>@board.Name</h1>
-    <div class="columns">
+    @if (!string.IsNullOrEmpty(moveError))
+    {
+        <p class="error" role="alert">@moveError</p>
+    }
+    <div class="columns" data-board aria-busy="@_moving">
         @foreach (var column in board.Columns.OrderBy(column => column.Order))
         {
-            <section class="column">
+            <section class="column" data-column-id="@column.Id">
                 <h2>@column.Title</h2>
-
+                <ol>
+                    @foreach (var card in column.Cards.OrderBy(card => card.Order))
+                    {
+                        <li class="card" draggable="true" data-card-id="@card.Id">
+                            <h3>@card.Title</h3>
+                            @if (!string.IsNullOrWhiteSpace(card.Description))
+                            {
+                                <p>@card.Description</p>
+                            }
+                        </li>
+                    }
+                </ol>
                 @if (column.Cards.Count == 0)
                 {
                     <p class="empty">No cards</p>
-                }
-                else
-                {
-                    <ol>
-                        @foreach (var card in column.Cards.OrderBy(card => card.Order))
-                        {
-                            <li class="card">
-                                <h3>@card.Title</h3>
-
-                                @if (!string.IsNullOrWhiteSpace(card.Description))
-                                {
-                                    <p>@card.Description</p>
-                                }
-                            </li>
-                        }
-                    </ol>
                 }
             </section>
         }
@@ -57,7 +59,11 @@ else
 @code {
     private BoardResponse? board;
     private bool missing;
-    private string? error;
+    private string? loadError;
+    private string? moveError;
+    private bool _moving;
+    private bool _dragReady;
+    private DotNetObjectReference<Board>? _self;
 
     [Parameter]
     public Guid Id { get; set; }
@@ -65,25 +71,149 @@ else
     protected override async Task OnParametersSetAsync()
     {
         missing = false;
-        error = null;
+        loadError = null;
+        moveError = null;
         board = null;
 
         var response = await Http.GetAsync($"api/boards/{Id}");
-
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             missing = true;
-
             return;
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            error = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
-
+            loadError = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
             return;
         }
 
         board = await response.Content.ReadFromJsonAsync<BoardResponse>();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (board is null || _dragReady)
+        {
+            return;
+        }
+
+        _self = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("relayDrag.start", _self);
+        _dragReady = true;
+    }
+
+    [JSInvokable]
+    public async Task OnCardDropped(string cardIdText, string columnIdText, int index)
+    {
+        if (_moving || board is null
+            || !Guid.TryParse(cardIdText, out var cardId)
+            || !Guid.TryParse(columnIdText, out var columnId))
+        {
+            return;
+        }
+
+        if (AlreadyThere(board, cardId, columnId, index))
+        {
+            moveError = null;
+            StateHasChanged();
+            return;
+        }
+
+        _moving = true;
+        moveError = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                $"api/cards/{cardId}/move",
+                new MoveCardRequest(columnId, index));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                moveError = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            var move = await response.Content.ReadFromJsonAsync<MoveCardResponse>();
+            if (move is null)
+            {
+                moveError = "The card could not be moved.";
+                return;
+            }
+
+            ApplyMove(move);
+        }
+        catch (HttpRequestException)
+        {
+            moveError = "The card could not be moved.";
+        }
+        finally
+        {
+            _moving = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("relayDrag.stop");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        _self?.Dispose();
+    }
+
+    private static bool AlreadyThere(BoardResponse board, Guid cardId, Guid columnId, int index)
+    {
+        var column = board.Columns.FirstOrDefault(item => item.Cards.Any(card => card.Id == cardId));
+        if (column is null || column.Id != columnId)
+        {
+            return false;
+        }
+
+        var current = column.Cards.OrderBy(card => card.Order).Select(card => card.Id).ToList().IndexOf(cardId);
+        return current == index;
+    }
+
+    private void ApplyMove(MoveCardResponse move)
+    {
+        if (board is null)
+        {
+            return;
+        }
+
+        var cards = board.Columns.SelectMany(column => column.Cards).ToDictionary(card => card.Id);
+        var columnOf = new Dictionary<Guid, Guid>();
+        foreach (var column in board.Columns)
+        {
+            foreach (var card in column.Cards)
+            {
+                columnOf[card.Id] = column.Id;
+            }
+        }
+
+        var orderOf = new Dictionary<Guid, int>();
+        foreach (var update in move.Orders)
+        {
+            columnOf[update.CardId] = update.ColumnId;
+            orderOf[update.CardId] = update.Order;
+        }
+
+        board = board with
+        {
+            Columns = board.Columns.Select(column => column with
+            {
+                Cards = cards.Values
+                    .Where(card => columnOf[card.Id] == column.Id)
+                    .Select(card => orderOf.TryGetValue(card.Id, out var order) ? card with { Order = order } : card)
+                    .OrderBy(card => card.Order)
+                    .ToList()
+            }).ToList()
+        };
     }
 }
