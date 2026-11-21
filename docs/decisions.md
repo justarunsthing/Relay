@@ -4,7 +4,7 @@ Decisions that are already in the code. SignalR, drag-and-drop, and the Blazor U
 
 ## Concrete handlers, no repository interfaces
 
-Each board use case is a class: `CreateBoardHandler`, `GetMyBoardsHandler`, and `GetBoardHandler`. The endpoint injects that class. The handler uses `AppDbContext` directly.
+Each board and card use case is a class, such as `CreateBoardHandler` and `MoveCardHandler`. The endpoint injects that class. The handler uses `AppDbContext` directly.
 
 A command repository and a query repository behind interfaces would pay off if the read store and the write store diverged, or if a unit test needed to stub storage. Relay has one PostgreSQL database and one implementation. The interface would wrap the same query that already sits in the handler. The planned API tests run the real handler through `WebApplicationFactory`, so they do not need a fake repository.
 
@@ -36,7 +36,9 @@ Entity Framework Core is 10.0.15. `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.1
 
 ## No unique index on card or column order
 
-`Order` is an integer rewritten to `0..n-1` when a card moves. A unique index on `(ColumnId, Order)` would fail while two rows briefly share an order during that rewrite. The foreign keys `Column.BoardId` and `Card.ColumnId` are indexed because those are the lookups used to load a board.
+`Order` is an integer. Create appends a card at the current count. Delete and move rewrite the affected column or columns to `0..n-1` in one save. A move clamps the requested index into the target column instead of rejecting a number past the end. A unique index on `(ColumnId, Order)` would fail while two rows briefly share an order during that rewrite. The foreign keys `Column.BoardId` and `Card.ColumnId` are indexed because those are the lookups used to load a board.
+
+Card writes do not broadcast. SignalR is a later step. The move response already returns the absolute orders so a later client can apply them without guessing.
 
 ## Shared contracts wait for the client
 

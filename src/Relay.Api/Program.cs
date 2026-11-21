@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Relay.Api.Auth;
 using Relay.Api.Boards;
+using Relay.Api.Cards;
 using Relay.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,6 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddBoardHandlers();
+builder.Services.AddCardHandlers();
 
 var app = builder.Build();
 
@@ -63,5 +65,6 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapBoardEndpoints();
+app.MapCardEndpoints();
 
 app.Run();
