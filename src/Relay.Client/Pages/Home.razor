@@ -1,5 +1,81 @@
 ﻿@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@using Relay.Shared.Boards
 
-<PageTitle>Relay</PageTitle>
+<PageTitle>Boards</PageTitle>
 
-<h1>Relay</h1>
+<h1>Boards</h1>
+
+<form class="create" @onsubmit="Create" @onsubmit:preventDefault="true">
+    <label>
+        New board
+        <input @bind="name" @bind:event="oninput" maxlength="80" required />
+    </label>
+    <button type="submit" disabled="@creating">Create</button>
+</form>
+@if (!string.IsNullOrEmpty(error))
+{
+    <p class="error" role="alert">@error</p>
+}
+
+@if (boards is null)
+{
+    <p class="status">Loading…</p>
+}
+else if (boards.Count == 0)
+{
+    <p class="status">No boards yet.</p>
+}
+else
+{
+    <ul class="board-list">
+        @foreach (var board in boards)
+        {
+            <li>
+                <a href="@($"/boards/{board.Id}")">@board.Name</a>
+                <time datetime="@board.CreatedAt.ToString("O")">@board.CreatedAt.LocalDateTime.ToString("MMM d, yyyy")</time>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<BoardSummaryResponse>? boards;
+    private string name = string.Empty;
+    private string? error;
+    private bool creating;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        boards = await Http.GetFromJsonAsync<List<BoardSummaryResponse>>("api/boards");
+    }
+
+    private async Task Create()
+    {
+        error = null;
+        creating = true;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/boards", new CreateBoardRequest(name));
+            if (!response.IsSuccessStatusCode)
+            {
+                error = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            name = string.Empty;
+            await LoadAsync();
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+}

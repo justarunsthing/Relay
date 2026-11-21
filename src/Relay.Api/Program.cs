@@ -59,12 +59,20 @@ if (app.Environment.IsDevelopment() && !EF.IsDesignTime)
     db.Database.Migrate();
 }
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
+}
+
 app.UseHttpsRedirection();
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapBoardEndpoints();
 app.MapCardEndpoints();
+app.MapFallbackToFile("index.html");
 
 app.Run();

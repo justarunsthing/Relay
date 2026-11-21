@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Relay.Api.Auth;
 using Relay.Api.Boards.Commands;
 using Relay.Api.Boards.Queries;
+using Relay.Shared.Boards;
 
 namespace Relay.Api.Boards;
 
@@ -27,7 +28,7 @@ public static class BoardEndpoints
     }
 
     private static async Task<IResult> Create(
-        CreateBoardCommand command,
+        CreateBoardRequest request,
         CreateBoardHandler handler,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
@@ -39,7 +40,7 @@ public static class BoardEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await handler.Handle(command, userId, cancellationToken);
+        var result = await handler.Handle(request, userId, cancellationToken);
 
         return result switch
         {

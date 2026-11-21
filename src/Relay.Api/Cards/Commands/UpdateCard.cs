@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Relay.Api.Boards;
+using Relay.Shared.Boards;
 using Relay.Api.Data;
 
 namespace Relay.Api.Cards.Commands;

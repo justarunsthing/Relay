@@ -1,3 +1,29 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject Relay.Client.Auth.RelayAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
 
-@Body
+<header class="topbar">
+    <a class="brand" href="/">Relay</a>
+    <AuthorizeView>
+        <Authorized>
+            <span class="who">@context.User.Identity?.Name</span>
+            <button type="button" class="ghost" @onclick="SignOut">Sign out</button>
+        </Authorized>
+        <NotAuthorized>
+            <a href="/login">Sign in</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</header>
+
+<main class="page">
+    @Body
+</main>
+
+@code {
+    private async Task SignOut()
+    {
+        await Auth.SignOutAsync();
+        Navigation.NavigateTo("/login");
+    }
+}

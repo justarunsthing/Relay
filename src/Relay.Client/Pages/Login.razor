@@ -1,0 +1,82 @@
+@page "/login"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject Relay.Client.Auth.RelayAuthenticationStateProvider Auth
+
+<PageTitle>Sign in</PageTitle>
+
+<section class="panel">
+    <h1>Sign in</h1>
+    <form @onsubmit="Submit" @onsubmit:preventDefault="true">
+        <label>
+            Email
+            <input type="email" autocomplete="username" @bind="email" @bind:event="oninput" required />
+        </label>
+        <label>
+            Password
+            <input type="password" autocomplete="current-password" @bind="password" @bind:event="oninput" required />
+        </label>
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <p class="error" role="alert">@error</p>
+        }
+        <button type="submit" disabled="@busy">Sign in</button>
+    </form>
+    <p class="aside">New here? <a href="/register">Create an account</a></p>
+</section>
+
+@code {
+    private string email = string.Empty;
+    private string password = string.Empty;
+    private string? error;
+    private bool busy;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private async Task Submit()
+    {
+        error = null;
+        busy = true;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                "api/auth/login",
+                new Relay.Shared.Auth.LoginRequest(email, password));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                error = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<Relay.Shared.Auth.LoginResponse>();
+
+            if (string.IsNullOrWhiteSpace(body?.Token))
+            {
+                error = "The request failed.";
+                return;
+            }
+
+            await Auth.SignInAsync(body.Token);
+
+            Navigation.NavigateTo(SafeReturnUrl(ReturnUrl));
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string SafeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//"))
+        {
+            return "/";
+        }
+
+        return returnUrl;
+    }
+}

@@ -1,9 +1,8 @@
 using Relay.Api.Data;
 using Relay.Api.Data.Entities;
+using Relay.Shared.Boards;
 
 namespace Relay.Api.Boards.Commands;
-
-public sealed record CreateBoardCommand(string Name);
 
 public abstract record CreateBoardResult
 {
@@ -17,11 +16,11 @@ public sealed class CreateBoardHandler(AppDbContext db)
     public const int MaxNameLength = 80;
 
     public async Task<CreateBoardResult> Handle(
-        CreateBoardCommand command,
+        CreateBoardRequest request,
         string userId,
         CancellationToken cancellationToken)
     {
-        var name = command.Name?.Trim() ?? string.Empty;
+        var name = request.Name?.Trim() ?? string.Empty;
 
         if (name.Length == 0)
         {

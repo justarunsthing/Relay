@@ -1,0 +1,85 @@
+@page "/register"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject Relay.Client.Auth.RelayAuthenticationStateProvider Auth
+
+<PageTitle>Create account</PageTitle>
+
+<section class="panel">
+    <h1>Create account</h1>
+    <form @onsubmit="Submit" @onsubmit:preventDefault="true">
+        <label>
+            Display name
+            <input autocomplete="nickname" @bind="displayName" @bind:event="oninput" required />
+        </label>
+        <label>
+            Email
+            <input type="email" autocomplete="username" @bind="email" @bind:event="oninput" required />
+        </label>
+        <label>
+            Password
+            <input type="password" autocomplete="new-password" @bind="password" @bind:event="oninput" required />
+        </label>
+        <p class="hint">At least 6 characters, with an uppercase letter, a lowercase letter, a digit, and a symbol.</p>
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <p class="error" role="alert">@error</p>
+        }
+        <button type="submit" disabled="@busy">Create account</button>
+    </form>
+    <p class="aside">Already registered? <a href="/login">Sign in</a></p>
+</section>
+
+@code {
+    private string displayName = string.Empty;
+    private string email = string.Empty;
+    private string password = string.Empty;
+    private string? error;
+    private bool busy;
+
+    private async Task Submit()
+    {
+        error = null;
+        busy = true;
+
+        try
+        {
+            var registered = await Http.PostAsJsonAsync(
+                "api/auth/register",
+                new Relay.Shared.Auth.RegisterRequest(email, password, displayName));
+
+            if (!registered.IsSuccessStatusCode)
+            {
+                error = await Relay.Client.Auth.ApiErrors.ReadAsync(registered);
+                return;
+            }
+
+            var signedIn = await Http.PostAsJsonAsync(
+                "api/auth/login",
+                new Relay.Shared.Auth.LoginRequest(email, password));
+
+            if (!signedIn.IsSuccessStatusCode)
+            {
+                error = "Account created. Sign in with that email and password.";
+                return;
+            }
+
+            var body = await signedIn.Content.ReadFromJsonAsync<Relay.Shared.Auth.LoginResponse>();
+
+            if (string.IsNullOrWhiteSpace(body?.Token))
+            {
+                error = "Account created. Sign in with that email and password.";
+                return;
+            }
+
+            await Auth.SignInAsync(body.Token);
+
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

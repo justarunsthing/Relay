@@ -1,0 +1,89 @@
+@page "/boards/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@using Relay.Shared.Boards
+
+<PageTitle>@(board?.Name ?? "Board")</PageTitle>
+
+@if (missing)
+{
+    <h1>Board</h1>
+    <p class="status">This board was not found.</p>
+}
+else if (!string.IsNullOrEmpty(error))
+{
+    <h1>Board</h1>
+    <p class="error" role="alert">@error</p>
+}
+else if (board is null)
+{
+    <h1>Board</h1>
+    <p class="status">Loading…</p>
+}
+else
+{
+    <h1>@board.Name</h1>
+    <div class="columns">
+        @foreach (var column in board.Columns.OrderBy(column => column.Order))
+        {
+            <section class="column">
+                <h2>@column.Title</h2>
+
+                @if (column.Cards.Count == 0)
+                {
+                    <p class="empty">No cards</p>
+                }
+                else
+                {
+                    <ol>
+                        @foreach (var card in column.Cards.OrderBy(card => card.Order))
+                        {
+                            <li class="card">
+                                <h3>@card.Title</h3>
+
+                                @if (!string.IsNullOrWhiteSpace(card.Description))
+                                {
+                                    <p>@card.Description</p>
+                                }
+                            </li>
+                        }
+                    </ol>
+                }
+            </section>
+        }
+    </div>
+}
+
+@code {
+    private BoardResponse? board;
+    private bool missing;
+    private string? error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        missing = false;
+        error = null;
+        board = null;
+
+        var response = await Http.GetAsync($"api/boards/{Id}");
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            missing = true;
+
+            return;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            error = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+
+            return;
+        }
+
+        board = await response.Content.ReadFromJsonAsync<BoardResponse>();
+    }
+}

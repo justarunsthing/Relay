@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Relay.Api.Data;
+using Relay.Shared.Auth;
 
 namespace Relay.Api.Auth;
 
@@ -85,13 +86,3 @@ public static class AuthEndpoints
     private static UserResponse ToResponse(ApplicationUser user) =>
         new(user.Id, user.Email ?? string.Empty, user.DisplayName);
 }
-
-public sealed record RegisterRequest(string Email, string Password, string DisplayName);
-
-public sealed record LoginRequest(string Email, string Password);
-
-public sealed record LoginResponse(string Token, UserResponse User);
-
-public sealed record UserResponse(string Id, string Email, string DisplayName);
-
-public sealed record AuthError(string Error);

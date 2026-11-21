@@ -1,6 +1,6 @@
 # Decisions
 
-Decisions that are already in the code. SignalR, drag-and-drop, and the Blazor UI are not built yet.
+Decisions that are already in the code. SignalR and drag-and-drop are not built yet. The Blazor shell is hosted by the API.
 
 ## Concrete handlers, no repository interfaces
 
@@ -40,6 +40,8 @@ Entity Framework Core is 10.0.15. `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.1
 
 Card writes do not broadcast. SignalR is a later step. The move response already returns the absolute orders so a later client can apply them without guessing.
 
-## Shared contracts wait for the client
+## Shared contracts
 
-`RegisterRequest`, `LoginResponse`, and the board response records live in the API project. The Blazor client does not call the API yet. Moving them to `Relay.Shared` becomes worth it when the client has to serialize the same shapes. `docs/data-model.md` is the entity diagram for the board tables.
+`RegisterRequest`, `LoginResponse`, `UserResponse`, `CreateBoardRequest`, and the board response records live in `Relay.Shared`. The Blazor client serializes those same shapes. Card move requests stay in the API until the client sends them. `docs/data-model.md` is the entity diagram for the board tables.
+
+The client stores the JWT in `localStorage` under `relay.token` and attaches it as a bearer token. A signed-out visit to `/` or `/boards/{id}` goes to `/login` with a return URL.

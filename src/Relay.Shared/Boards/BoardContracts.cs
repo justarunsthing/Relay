@@ -1,4 +1,6 @@
-namespace Relay.Api.Boards;
+namespace Relay.Shared.Boards;
+
+public sealed record CreateBoardRequest(string Name);
 
 public sealed record BoardSummaryResponse(Guid Id, string Name, DateTimeOffset CreatedAt);
 

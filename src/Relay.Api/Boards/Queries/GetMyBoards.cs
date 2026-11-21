@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Relay.Api.Data;
+using Relay.Shared.Boards;
 
 namespace Relay.Api.Boards.Queries;
 

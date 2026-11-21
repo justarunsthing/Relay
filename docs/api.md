@@ -1,6 +1,15 @@
 # API
 
-The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. Protected routes expect `Authorization: Bearer <token>`.
+The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`.
+
+```mermaid
+flowchart LR
+    browser[Browser] --> host[Relay.Api]
+    host --> pages[index.html and Blazor files]
+    host --> api[REST endpoints]
+    pages --> stored[relay.token]
+    stored --> api
+```
 
 Auth routes are mapped in `src/Relay.Api/Auth/AuthEndpoints.cs`. The register and login actions are implemented in that file. Board routes are mapped in `src/Relay.Api/Boards/BoardEndpoints.cs` and card routes in `src/Relay.Api/Cards/CardEndpoints.cs`. Each of those routes delegates to one handler per use case.
 

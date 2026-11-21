@@ -1,4 +1,5 @@
 using Relay.Api.Data.Entities;
+using Relay.Shared.Boards;
 
 namespace Relay.Api.Boards;
 
