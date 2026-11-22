@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Relay.Shared.Boards;
 using Relay.Api.Data;
+using Relay.Api.Hubs;
+using Relay.Shared.Boards;
 
 namespace Relay.Api.Cards.Commands;
 
@@ -15,7 +16,7 @@ public abstract record UpdateCardResult
     public sealed record Missing : UpdateCardResult;
 }
 
-public sealed class UpdateCardHandler(AppDbContext db)
+public sealed class UpdateCardHandler(AppDbContext db, BoardBroadcaster boards)
 {
     public async Task<UpdateCardResult> Handle(
         Guid cardId,
@@ -27,7 +28,9 @@ public sealed class UpdateCardHandler(AppDbContext db)
             return new UpdateCardResult.Invalid(error!);
         }
 
-        var card = await db.Cards.FirstOrDefaultAsync(card => card.Id == cardId, cancellationToken);
+        var card = await db.Cards
+            .Include(entity => entity.Column)
+            .FirstOrDefaultAsync(entity => entity.Id == cardId, cancellationToken);
 
         if (card is null)
         {
@@ -40,6 +43,10 @@ public sealed class UpdateCardHandler(AppDbContext db)
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return new UpdateCardResult.Updated(CreateCardHandler.ToResponse(card));
+        var response = CreateCardHandler.ToResponse(card);
+
+        await boards.CardUpdated(card.Column.BoardId, card.ColumnId, response);
+
+        return new UpdateCardResult.Updated(response);
     }
 }

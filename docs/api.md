@@ -1,6 +1,6 @@
 # API
 
-The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`.
+The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. Card changes are also broadcast on the SignalR hub at `/hubs/board`. The Blazor client does not open that connection yet.
 
 ```mermaid
 flowchart LR
@@ -57,7 +57,7 @@ A missing or blank name is 400. A name longer than 80 characters is 400. An unkn
 
 ## Cards
 
-Every card route requires a signed-in user. Handlers live in `src/Relay.Api/Cards/Commands`. These routes do not broadcast over SignalR.
+Every card route requires a signed-in user. Handlers live in `src/Relay.Api/Cards/Commands`. After `SaveChanges` succeeds, the handler broadcasts to the board group. A failed write returns before that broadcast.
 
 | Method | Path | Success | Notes |
 | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ Every card route requires a signed-in user. Handlers live in `src/Relay.Api/Card
 
 Title is required, trimmed, and at most 120 characters. Description is optional, trimmed, and at most 2000 characters. A blank description is stored as null. A missing card, board, or column is 404. A column on a different board is 400.
 
-A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page applies those orders after a drop. A failed move leaves the board unchanged.
+A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page applies those orders after a drop. A failed move leaves the board unchanged and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`.
 
 ```mermaid
 flowchart TD
@@ -80,4 +80,38 @@ flowchart TD
     remove --> insert[Insert at clamped index]
     insert --> rewrite[Rewrite affected columns from zero]
     rewrite --> save[Save]
+    save --> broadcast[Broadcast CardMoved to the board group]
+```
+
+## SignalR
+
+`BoardHub` is mapped at `/hubs/board` and requires a signed-in user. The hub does not write to the database. The WebSocket handshake cannot send an `Authorization` header, so the JWT middleware reads `access_token` from the query string only when the path starts with `/hubs/board`. A query token on any other path is ignored.
+
+`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the connection joins `board-{boardId}` and the hub sends `BoardState` to that caller. `BoardState` is the board, its columns, and its cards in order, the same shape as `GET /api/boards/{id}`. `LeaveBoard` removes the connection from that group. If the client disconnects without calling `LeaveBoard`, `OnDisconnectedAsync` removes it from every board it joined.
+
+| Event | Who receives it | Payload |
+| --- | --- | --- |
+| `BoardState` | The caller of `JoinBoard` | Board, columns, and cards in order |
+| `CardAdded` | Group `board-{boardId}` | Board id, column id, and the new card |
+| `CardUpdated` | Group `board-{boardId}` | Board id, column id, and the updated card |
+| `CardDeleted` | Group `board-{boardId}` | Board id, column id, deleted card id, and the column's rewritten orders |
+| `CardMoved` | Group `board-{boardId}` | The move response, including the rewritten orders |
+
+```mermaid
+sequenceDiagram
+    participant Page
+    participant Hub
+    participant Writer as Card handler
+    Page->>Hub: JoinBoard
+    Hub-->>Page: BoardState
+    Writer->>Hub: CardMoved
+    Hub-->>Page: CardMoved
+```
+
+```mermaid
+flowchart LR
+    handshake[Hub handshake] --> queryToken[access_token on the hub path]
+    queryToken --> jwt[JWT bearer]
+    restCall[REST request] --> bearerHeader[Authorization bearer]
+    bearerHeader --> jwt
 ```

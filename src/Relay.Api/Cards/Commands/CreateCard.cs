@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using Relay.Shared.Boards;
 using Relay.Api.Data;
 using Relay.Api.Data.Entities;
+using Relay.Api.Hubs;
+using Relay.Shared.Boards;
 
 namespace Relay.Api.Cards.Commands;
 
@@ -16,7 +17,7 @@ public abstract record CreateCardResult
     public sealed record Missing : CreateCardResult;
 }
 
-public sealed class CreateCardHandler(AppDbContext db)
+public sealed class CreateCardHandler(AppDbContext db, BoardBroadcaster boards)
 {
     public async Task<CreateCardResult> Handle(
         Guid boardId,
@@ -53,7 +54,11 @@ public sealed class CreateCardHandler(AppDbContext db)
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return new CreateCardResult.Created(ToResponse(card));
+        var response = ToResponse(card);
+
+        await boards.CardAdded(boardId, card.ColumnId, response);
+
+        return new CreateCardResult.Created(response);
     }
 
     internal static CardResponse ToResponse(Card card) =>

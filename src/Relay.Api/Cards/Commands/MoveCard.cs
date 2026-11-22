@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Relay.Api.Data;
 using Relay.Api.Data.Entities;
+using Relay.Api.Hubs;
 using Relay.Shared.Cards;
 
 namespace Relay.Api.Cards.Commands;
@@ -14,7 +15,7 @@ public abstract record MoveCardResult
     public sealed record Missing : MoveCardResult;
 }
 
-public sealed class MoveCardHandler(AppDbContext db)
+public sealed class MoveCardHandler(AppDbContext db, BoardBroadcaster boards)
 {
     public async Task<MoveCardResult> Handle(
         Guid cardId,
@@ -43,6 +44,7 @@ public sealed class MoveCardHandler(AppDbContext db)
             return new MoveCardResult.Invalid("The column is on a different board.");
         }
 
+        var boardId = card.Column.BoardId;
         var fromColumnId = card.ColumnId;
         var source = await OrderedCards(fromColumnId, cancellationToken);
 
@@ -78,7 +80,11 @@ public sealed class MoveCardHandler(AppDbContext db)
             .Select(entity => new CardOrderResponse(entity.Id, entity.ColumnId, entity.Order))
             .ToList();
 
-        return new MoveCardResult.Moved(new MoveCardResponse(card.Id, fromColumnId, target.Id, orders));
+        var move = new MoveCardResponse(card.Id, fromColumnId, target.Id, orders);
+
+        await boards.CardMoved(boardId, move);
+
+        return new MoveCardResult.Moved(move);
     }
 
     private async Task<List<Card>> OrderedCards(Guid columnId, CancellationToken cancellationToken) =>

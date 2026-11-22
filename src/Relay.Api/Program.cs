@@ -7,6 +7,7 @@ using Relay.Api.Auth;
 using Relay.Api.Boards;
 using Relay.Api.Cards;
 using Relay.Api.Data;
+using Relay.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,9 +45,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+
+                if (!string.IsNullOrEmpty(accessToken)
+                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs/board"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<BoardBroadcaster>();
 builder.Services.AddBoardHandlers();
 builder.Services.AddCardHandlers();
 
@@ -73,6 +92,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapBoardEndpoints();
 app.MapCardEndpoints();
+app.MapHub<BoardHub>("/hubs/board");
 app.MapFallbackToFile("index.html");
 
 app.Run();
