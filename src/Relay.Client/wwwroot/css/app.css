@@ -224,6 +224,15 @@ button:disabled {
     text-decoration: none;
 }
 
+.banner {
+    margin: 0 0 1rem;
+    padding: 0.35rem 0.75rem;
+    background: #1c1915;
+    color: #f6f1e8;
+    border-radius: 0.5rem;
+    font-size: 0.92rem;
+}
+
 .presence {
     list-style: none;
     display: flex;

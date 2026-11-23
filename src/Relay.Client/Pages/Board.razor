@@ -33,6 +33,15 @@ else if (board is null)
 else
 {
     <h1>@board.Name</h1>
+
+    @if (_reconnecting)
+    {
+        <p class="banner" role="status">Reconnecting…</p>
+    }
+    else if (_liveStopped)
+    {
+        <p class="banner" role="status">Live updates stopped.</p>
+    }
     @if (people.Count > 0)
     {
         <ul class="presence" aria-label="On this board">
@@ -53,6 +62,7 @@ else
     {
         <p class="error" role="alert">@moveError</p>
     }
+
     <div class="columns" data-board aria-busy="@_moving">
         @foreach (var column in board.Columns.OrderBy(column => column.Order))
         {
@@ -70,6 +80,7 @@ else
                         </li>
                     }
                 </ol>
+
                 @if (column.Cards.Count == 0)
                 {
                     <p class="empty">No cards</p>
@@ -87,9 +98,10 @@ else
     private string? moveError;
     private IReadOnlyList<BoardUser> people = [];
     private bool _moving;
-    private bool _diverged;
     private bool _moveConfirmed;
-    private BoardResponse? _heldState;
+    private bool _reconnecting;
+    private bool _liveStopped;
+    private int _serverStamp;
     private bool _disposed;
     private bool _dragReady;
     private Guid _loadedId;
@@ -113,12 +125,12 @@ else
         await StopDragAsync();
 
         _loadedId = Id;
-        _diverged = false;
-        _heldState = null;
         missing = false;
         loadError = null;
         liveError = null;
         moveError = null;
+        _reconnecting = false;
+        _liveStopped = false;
         people = [];
         board = null;
 
@@ -182,10 +194,10 @@ else
         }
 
         var snapshot = board;
+        var stamp = _serverStamp;
         _moving = true;
         _moveConfirmed = false;
         _activeCard = cardId;
-        _diverged = true;
         moveError = null;
 
         var optimistic = BoardView.OptimisticMove(board, cardId, columnId, index);
@@ -209,9 +221,9 @@ else
 
             if (!response.IsSuccessStatusCode)
             {
-                if (!_moveConfirmed)
+                if (!_moveConfirmed && stamp == _serverStamp)
                 {
-                    board = _heldState ?? snapshot;
+                    board = snapshot;
                     moveError = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
                 }
 
@@ -222,9 +234,9 @@ else
 
             if (move is null)
             {
-                if (!_moveConfirmed)
+                if (!_moveConfirmed && stamp == _serverStamp)
                 {
-                    board = _heldState ?? snapshot;
+                    board = snapshot;
                     moveError = "The card could not be moved.";
                 }
 
@@ -235,16 +247,15 @@ else
         }
         catch (HttpRequestException)
         {
-            if (!_disposed && !_moveConfirmed && _loadedId == Id)
+            if (!_disposed && !_moveConfirmed && _loadedId == Id && stamp == _serverStamp)
             {
-                board = _heldState ?? snapshot;
+                board = snapshot;
                 moveError = "The card could not be moved.";
             }
         }
         finally
         {
             _moving = false;
-            _heldState = null;
 
             if (!_disposed)
             {
@@ -262,22 +273,49 @@ else
             }
 
             people = users;
-
-            if (_moving && !_moveConfirmed)
-            {
-                _heldState = state;
-                StateHasChanged();
-                return;
-            }
-
-            if (_diverged)
-            {
-                StateHasChanged();
-                return;
-            }
-
             board = state;
             missing = false;
+            _serverStamp++;
+            StateHasChanged();
+        });
+
+    public Task OnReconnecting() =>
+        InvokeAsync(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _reconnecting = true;
+            _liveStopped = false;
+            StateHasChanged();
+        });
+
+    public Task OnReconnected() =>
+        InvokeAsync(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _reconnecting = false;
+            _liveStopped = false;
+            liveError = null;
+            StateHasChanged();
+        });
+
+    public Task OnConnectionClosed() =>
+        InvokeAsync(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _reconnecting = false;
+            _liveStopped = true;
             StateHasChanged();
         });
 
@@ -347,12 +385,6 @@ else
     {
         var basis = board;
 
-        if (move.CardId == _activeCard && _moveConfirmed && _heldState is not null)
-        {
-            basis = _heldState;
-            _heldState = null;
-        }
-
         if (basis is null)
         {
             return;
@@ -368,7 +400,6 @@ else
             return;
         }
 
-        _diverged = true;
         board = apply(board);
         StateHasChanged();
     }

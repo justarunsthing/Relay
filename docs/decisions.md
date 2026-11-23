@@ -1,6 +1,6 @@
 # Decisions
 
-Decisions that are already in the code. The Blazor shell is hosted by the API. The board page joins the SignalR hub, applies card events, shows who is on the board, and moves a card locally before the move request returns.
+Decisions that are already in the code. The Blazor shell is hosted by the API. The board page joins the SignalR hub, applies card events, shows who is on the board, reconnects after a dropped connection, and moves a card locally before the move request returns.
 
 ## Concrete handlers, no repository interfaces
 
@@ -56,7 +56,9 @@ The WebSocket handshake cannot set an `Authorization` header. The JWT middleware
 
 Create, update, delete, and move still persist in their handlers. After `SaveChanges` succeeds, the handler broadcasts `CardAdded`, `CardUpdated`, `CardDeleted`, or `CardMoved` to that board's group. `CardMoved` is the move response, including the rewritten orders. `CardDeleted` includes the rewritten orders for the column that lost the card. A validation failure or a missing row returns before the broadcast.
 
-The board page opens the hub for the board it is showing. `AccessTokenProvider` reads the same `relay.token` value the REST client sends as a bearer token. The page replaces its snapshot with `BoardState`. Later card events patch the snapshot. A drop updates the snapshot immediately, then calls the move API. The response and the page's own `CardMoved` echo both write the server orders over that snapshot. A failed move puts the previous snapshot back and shows the error. Another open board page applies the event without a local drop. Leaving the page calls `LeaveBoard`. Automatic reconnect is a later step.
+The board page opens the hub for the board it is showing. `AccessTokenProvider` reads the same `relay.token` value the REST client sends as a bearer token. The page replaces its snapshot with `BoardState`. Later card events patch the snapshot. A drop updates the snapshot immediately, then calls the move API. The response and the page's own `CardMoved` echo both write the server orders over that snapshot. A failed move puts the previous snapshot back and shows the error. Another open board page applies the event without a local drop. Leaving the page calls `LeaveBoard`.
+
+The hub connection uses `WithAutomaticReconnect`. A dropped connection keeps the columns on screen and shows a reconnecting banner. On `Reconnected` the page calls `JoinBoard` again. The `BoardState` from that call replaces the columns, the cards, and who is viewing, including a local move that never reached the server. If the retries end and the connection stays closed, the banner says live updates stopped.
 
 ## One person per user on a board
 

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Relay.Shared.Boards;
 using Relay.Shared.Cards;
@@ -20,18 +21,28 @@ public interface IBoardListener
     Task OnUserJoined(UserJoined joined);
 
     Task OnUserLeft(UserLeft left);
+
+    Task OnReconnecting();
+
+    Task OnReconnected();
+
+    Task OnConnectionClosed();
 }
 
 public sealed class BoardConnection : IAsyncDisposable
 {
     private readonly HubConnection _connection;
     private readonly Guid _boardId;
+    private readonly IBoardListener _listener;
+    private int _disposed;
 
     public BoardConnection(Uri hubUrl, Func<Task<string?>> accessToken, Guid boardId, IBoardListener listener)
     {
         _boardId = boardId;
+        _listener = listener;
         _connection = new HubConnectionBuilder()
             .WithUrl(hubUrl, options => options.AccessTokenProvider = accessToken)
+            .WithAutomaticReconnect()
             .Build();
 
         _connection.On<BoardResponse, IReadOnlyList<BoardUser>>("BoardState", listener.OnBoardState);
@@ -41,6 +52,9 @@ public sealed class BoardConnection : IAsyncDisposable
         _connection.On<MoveCardResponse>("CardMoved", listener.OnCardMoved);
         _connection.On<UserJoined>("UserJoined", listener.OnUserJoined);
         _connection.On<UserLeft>("UserLeft", listener.OnUserLeft);
+        _connection.Reconnecting += OnReconnecting;
+        _connection.Reconnected += OnReconnected;
+        _connection.Closed += OnClosed;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -51,6 +65,11 @@ public sealed class BoardConnection : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+        {
+            return;
+        }
+
         try
         {
             if (_connection.State == HubConnectionState.Connected)
@@ -64,4 +83,37 @@ public sealed class BoardConnection : IAsyncDisposable
 
         await _connection.DisposeAsync();
     }
+
+    private Task OnReconnecting(Exception? _) =>
+        Disposed ? Task.CompletedTask : _listener.OnReconnecting();
+
+    private async Task OnReconnected(string? _)
+    {
+        if (Disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            await _connection.InvokeAsync("JoinBoard", _boardId);
+
+            if (!Disposed)
+            {
+                await _listener.OnReconnected();
+            }
+        }
+        catch (Exception ex) when (ex is HubException or HttpRequestException or InvalidOperationException or ObjectDisposedException)
+        {
+            if (!Disposed)
+            {
+                await _listener.OnConnectionClosed();
+            }
+        }
+    }
+
+    private Task OnClosed(Exception? _) =>
+        Disposed ? Task.CompletedTask : _listener.OnConnectionClosed();
+
+    private bool Disposed => Volatile.Read(ref _disposed) == 1;
 }
