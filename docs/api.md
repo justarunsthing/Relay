@@ -1,14 +1,16 @@
 # API
 
-The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. Card changes are also broadcast on the SignalR hub at `/hubs/board`. The Blazor client does not open that connection yet.
+The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. The board page opens the SignalR hub at `/hubs/board` with that same token.
 
 ```mermaid
 flowchart LR
     browser[Browser] --> host[Relay.Api]
     host --> pages[index.html and Blazor files]
     host --> api[REST endpoints]
+    host --> hub[Board hub]
     pages --> stored[relay.token]
     stored --> api
+    stored --> hub
 ```
 
 Auth routes are mapped in `src/Relay.Api/Auth/AuthEndpoints.cs`. The register and login actions are implemented in that file. Board routes are mapped in `src/Relay.Api/Boards/BoardEndpoints.cs` and card routes in `src/Relay.Api/Cards/CardEndpoints.cs`. Each of those routes delegates to one handler per use case.
@@ -68,7 +70,16 @@ Every card route requires a signed-in user. Handlers live in `src/Relay.Api/Card
 
 Title is required, trimmed, and at most 120 characters. Description is optional, trimmed, and at most 2000 characters. A blank description is stored as null. A missing card, board, or column is 404. A column on a different board is 400.
 
-A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page applies those orders after a drop. A failed move leaves the board unchanged and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`.
+A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page moves the card locally first, then replaces the affected cards with those orders. A failed move restores the snapshot from before the drop and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`, and every open board page applies it.
+
+```mermaid
+flowchart TD
+    drop[Drop a card] --> local[Move it in the local snapshot]
+    local --> post[POST the move]
+    post --> ok{Write succeeded}
+    ok -->|yes| orders[Replace affected cards with the returned orders]
+    ok -->|no| restore[Restore the snapshot and show the error]
+```
 
 ```mermaid
 flowchart TD
@@ -87,7 +98,9 @@ flowchart TD
 
 `BoardHub` is mapped at `/hubs/board` and requires a signed-in user. The hub does not write to the database. The WebSocket handshake cannot send an `Authorization` header, so the JWT middleware reads `access_token` from the query string only when the path starts with `/hubs/board`. A query token on any other path is ignored.
 
-`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the connection joins `board-{boardId}` and the hub sends `BoardState` to that caller. `BoardState` is the board, its columns, and its cards in order, the same shape as `GET /api/boards/{id}`. `LeaveBoard` removes the connection from that group. If the client disconnects without calling `LeaveBoard`, `OnDisconnectedAsync` removes it from every board it joined.
+`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the hub sends `BoardState` to that caller, then adds the connection to `board-{boardId}`. Card events arrive after that snapshot. `BoardState` is the board, its columns, and its cards in order, the same shape as `GET /api/boards/{id}`. `LeaveBoard` removes the connection from that group. If the client disconnects without calling `LeaveBoard`, `OnDisconnectedAsync` removes it from every board it joined.
+
+The board page connects when `/boards/{id}` opens. `AccessTokenProvider` returns the JWT stored under `relay.token`. The page applies `BoardState`, then applies `CardAdded`, `CardUpdated`, `CardDeleted`, and `CardMoved` as they arrive. `CardMoved` uses the same reindexed orders as the move response. Closing the page calls `LeaveBoard`.
 
 | Event | Who receives it | Payload |
 | --- | --- | --- |

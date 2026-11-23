@@ -1,6 +1,6 @@
 # Decisions
 
-Decisions that are already in the code. The Blazor shell is hosted by the API. Drag-and-drop calls the move route. The SignalR hub broadcasts a card change after the write succeeds. The browser does not subscribe yet.
+Decisions that are already in the code. The Blazor shell is hosted by the API. The board page joins the SignalR hub, applies card events, and moves a card locally before the move request returns.
 
 ## Concrete handlers, no repository interfaces
 
@@ -52,6 +52,8 @@ The client stores the JWT in `localStorage` under `relay.token` and attaches it 
 
 The WebSocket handshake cannot set an `Authorization` header. The JWT middleware accepts `access_token` in the query string only when the path is under `/hubs/board`. Other routes still require the bearer header, so a query token cannot authorize a card write.
 
-`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the connection joins `board-{boardId}` and receives `BoardState`: the board, its columns, and its cards in order. `LeaveBoard` removes that connection from the group. The hub remembers which boards the connection joined, and `OnDisconnectedAsync` leaves those groups when the client never called `LeaveBoard`. That memory is the connection's group list. It does not count how many people are viewing the board.
+`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the caller receives `BoardState` — the board, its columns, and its cards in order — and then the connection joins `board-{boardId}`. Card events arrive after that snapshot. `LeaveBoard` removes that connection from the group. The hub remembers which boards the connection joined, and `OnDisconnectedAsync` leaves those groups when the client never called `LeaveBoard`. That memory is the connection's group list. It does not count how many people are viewing the board.
 
 Create, update, delete, and move still persist in their handlers. After `SaveChanges` succeeds, the handler broadcasts `CardAdded`, `CardUpdated`, `CardDeleted`, or `CardMoved` to that board's group. `CardMoved` is the move response, including the rewritten orders. `CardDeleted` includes the rewritten orders for the column that lost the card. A validation failure or a missing row returns before the broadcast.
+
+The board page opens the hub for the board it is showing. `AccessTokenProvider` reads the same `relay.token` value the REST client sends as a bearer token. The page replaces its snapshot with `BoardState`. Later card events patch the snapshot. A drop updates the snapshot immediately, then calls the move API. The response and the page's own `CardMoved` echo both write the server orders over that snapshot. A failed move puts the previous snapshot back and shows the error. Another open board page applies the event without a local drop. Leaving the page calls `LeaveBoard`. Automatic reconnect and presence are later steps.

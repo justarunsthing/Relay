@@ -15,11 +15,9 @@ public sealed class BoardHub(GetBoardHandler getBoard) : Hub<IBoardClient>
     {
         var board = await getBoard.Handle(boardId, Context.ConnectionAborted) ?? throw new HubException("Board not found.");
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(boardId), Context.ConnectionAborted);
-
-        Remember(boardId);
-
         await Clients.Caller.BoardState(board);
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(boardId), Context.ConnectionAborted);
+        Remember(boardId);
     }
 
     public Task LeaveBoard(Guid boardId) => Leave(boardId);
