@@ -1,6 +1,6 @@
 # API
 
-The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. The board page opens the SignalR hub at `/hubs/board` with that same token.
+The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. The board page opens the SignalR hub at `/hubs/board` with that same token. `GET /health` returns 200 and does not touch the database.
 
 ```mermaid
 flowchart LR

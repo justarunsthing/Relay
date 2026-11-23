@@ -6,7 +6,7 @@ Decisions that are already in the code. The Blazor shell is hosted by the API. T
 
 Each board and card use case is a class, such as `CreateBoardHandler` and `MoveCardHandler`. The endpoint injects that class. The handler uses `AppDbContext` directly.
 
-A command repository and a query repository behind interfaces would pay off if the read store and the write store diverged, or if a unit test needed to stub storage. Relay has one PostgreSQL database and one implementation. The interface would wrap the same query that already sits in the handler. The planned API tests run the real handler through `WebApplicationFactory`, so they do not need a fake repository.
+A command repository and a query repository behind interfaces would pay off if the read store and the write store diverged, or if a unit test needed to stub storage. Relay has one PostgreSQL database and one implementation. The interface would wrap the same query that already sits in the handler. The API tests run the real handler through `WebApplicationFactory` against a separate `RelayTests` database, so they do not need a fake repository.
 
 Add an interface when a second implementation appears. Until then the handler is the whole use case, and the Entity Framework query stays next to the rule it serves.
 

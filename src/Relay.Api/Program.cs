@@ -91,6 +91,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok());
 app.MapAuthEndpoints();
 app.MapBoardEndpoints();
 app.MapCardEndpoints();
@@ -98,3 +99,5 @@ app.MapHub<BoardHub>("/hubs/board");
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+public partial class Program;
