@@ -8,4 +8,7 @@ public static class CurrentUser
     public static string? Id(ClaimsPrincipal principal) =>
         principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
         ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    public static string? DisplayName(ClaimsPrincipal principal) =>
+        principal.FindFirstValue("display_name");
 }

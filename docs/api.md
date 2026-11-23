@@ -98,25 +98,29 @@ flowchart TD
 
 `BoardHub` is mapped at `/hubs/board` and requires a signed-in user. The hub does not write to the database. The WebSocket handshake cannot send an `Authorization` header, so the JWT middleware reads `access_token` from the query string only when the path starts with `/hubs/board`. A query token on any other path is ignored.
 
-`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the hub sends `BoardState` to that caller, then adds the connection to `board-{boardId}`. Card events arrive after that snapshot. `BoardState` is the board, its columns, and its cards in order, the same shape as `GET /api/boards/{id}`. `LeaveBoard` removes the connection from that group. If the client disconnects without calling `LeaveBoard`, `OnDisconnectedAsync` removes it from every board it joined.
+`JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the hub sends `BoardState` to that caller, then adds the connection to `board-{boardId}`. Card events arrive after that snapshot. `BoardState` is the board, its columns, and its cards in order, the same shape as `GET /api/boards/{id}`, plus the people already on the board. A person is one user, however many tabs they have open. `UserJoined` goes to the others only when this is that user's first connection. `LeaveBoard` removes the connection from that group. `UserLeft` goes out only when it was their last connection. If the client disconnects without calling `LeaveBoard`, `OnDisconnectedAsync` uses that same leave path.
 
-The board page connects when `/boards/{id}` opens. `AccessTokenProvider` returns the JWT stored under `relay.token`. The page applies `BoardState`, then applies `CardAdded`, `CardUpdated`, `CardDeleted`, and `CardMoved` as they arrive. `CardMoved` uses the same reindexed orders as the move response. Closing the page calls `LeaveBoard`.
+The board page connects when `/boards/{id}` opens. `AccessTokenProvider` returns the JWT stored under `relay.token`. The page applies `BoardState`, then applies `CardAdded`, `CardUpdated`, `CardDeleted`, `CardMoved`, `UserJoined`, and `UserLeft` as they arrive. `CardMoved` uses the same reindexed orders as the move response. The page lists the display name of each person on the board. Closing the page calls `LeaveBoard`.
 
 | Event | Who receives it | Payload |
 | --- | --- | --- |
-| `BoardState` | The caller of `JoinBoard` | Board, columns, and cards in order |
+| `BoardState` | The caller of `JoinBoard` | Board, columns, and cards in order, plus the people on the board |
 | `CardAdded` | Group `board-{boardId}` | Board id, column id, and the new card |
 | `CardUpdated` | Group `board-{boardId}` | Board id, column id, and the updated card |
 | `CardDeleted` | Group `board-{boardId}` | Board id, column id, deleted card id, and the column's rewritten orders |
 | `CardMoved` | Group `board-{boardId}` | The move response, including the rewritten orders |
+| `UserJoined` | The others in `board-{boardId}` | Board id and the user, only for their first connection |
+| `UserLeft` | Group `board-{boardId}` | Board id and the user id, only for their last connection |
 
 ```mermaid
 sequenceDiagram
     participant Page
     participant Hub
+    participant Other
     participant Writer as Card handler
     Page->>Hub: JoinBoard
     Hub-->>Page: BoardState
+    Hub-->>Other: UserJoined
     Writer->>Hub: CardMoved
     Hub-->>Page: CardMoved
 ```

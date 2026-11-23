@@ -12,3 +12,9 @@ public sealed record CardDeleted(
     Guid ColumnId,
     Guid CardId,
     IReadOnlyList<CardOrderResponse> Orders);
+
+public sealed record BoardUser(string UserId, string DisplayName);
+
+public sealed record UserJoined(Guid BoardId, BoardUser User);
+
+public sealed record UserLeft(Guid BoardId, string UserId);

@@ -7,7 +7,7 @@ namespace Relay.Client.Boards;
 
 public interface IBoardListener
 {
-    Task OnBoardState(BoardResponse board);
+    Task OnBoardState(BoardResponse board, IReadOnlyList<BoardUser> users);
 
     Task OnCardAdded(CardAdded added);
 
@@ -16,6 +16,10 @@ public interface IBoardListener
     Task OnCardDeleted(CardDeleted deleted);
 
     Task OnCardMoved(MoveCardResponse move);
+
+    Task OnUserJoined(UserJoined joined);
+
+    Task OnUserLeft(UserLeft left);
 }
 
 public sealed class BoardConnection : IAsyncDisposable
@@ -30,11 +34,13 @@ public sealed class BoardConnection : IAsyncDisposable
             .WithUrl(hubUrl, options => options.AccessTokenProvider = accessToken)
             .Build();
 
-        _connection.On<BoardResponse>("BoardState", listener.OnBoardState);
+        _connection.On<BoardResponse, IReadOnlyList<BoardUser>>("BoardState", listener.OnBoardState);
         _connection.On<CardAdded>("CardAdded", listener.OnCardAdded);
         _connection.On<CardUpdated>("CardUpdated", listener.OnCardUpdated);
         _connection.On<CardDeleted>("CardDeleted", listener.OnCardDeleted);
         _connection.On<MoveCardResponse>("CardMoved", listener.OnCardMoved);
+        _connection.On<UserJoined>("UserJoined", listener.OnUserJoined);
+        _connection.On<UserLeft>("UserLeft", listener.OnUserLeft);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

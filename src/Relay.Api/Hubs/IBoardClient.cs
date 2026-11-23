@@ -6,7 +6,7 @@ namespace Relay.Api.Hubs;
 
 public interface IBoardClient
 {
-    Task BoardState(BoardResponse board);
+    Task BoardState(BoardResponse board, IReadOnlyList<BoardUser> users);
 
     Task CardAdded(CardAdded card);
 
@@ -15,4 +15,8 @@ public interface IBoardClient
     Task CardDeleted(CardDeleted card);
 
     Task CardMoved(MoveCardResponse move);
+
+    Task UserJoined(UserJoined joined);
+
+    Task UserLeft(UserLeft left);
 }

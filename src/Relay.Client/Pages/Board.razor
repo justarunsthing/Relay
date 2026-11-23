@@ -33,6 +33,18 @@ else if (board is null)
 else
 {
     <h1>@board.Name</h1>
+    @if (people.Count > 0)
+    {
+        <ul class="presence" aria-label="On this board">
+            @foreach (var person in people)
+            {
+                <li>
+                    <span class="avatar" aria-hidden="true">@Initial(person.DisplayName)</span>
+                    <span>@person.DisplayName</span>
+                </li>
+            }
+        </ul>
+    }
     @if (!string.IsNullOrEmpty(liveError))
     {
         <p class="error" role="alert">@liveError</p>
@@ -73,6 +85,7 @@ else
     private string? loadError;
     private string? liveError;
     private string? moveError;
+    private IReadOnlyList<BoardUser> people = [];
     private bool _moving;
     private bool _diverged;
     private bool _moveConfirmed;
@@ -106,6 +119,7 @@ else
         loadError = null;
         liveError = null;
         moveError = null;
+        people = [];
         board = null;
 
         var response = await Http.GetAsync($"api/boards/{Id}");
@@ -239,7 +253,7 @@ else
         }
     }
 
-    public Task OnBoardState(BoardResponse state) =>
+    public Task OnBoardState(BoardResponse state, IReadOnlyList<BoardUser> users) =>
         InvokeAsync(() =>
         {
             if (_disposed || state.Id != Id)
@@ -247,19 +261,58 @@ else
                 return;
             }
 
+            people = users;
+
             if (_moving && !_moveConfirmed)
             {
                 _heldState = state;
+                StateHasChanged();
                 return;
             }
 
             if (_diverged)
             {
+                StateHasChanged();
                 return;
             }
 
             board = state;
             missing = false;
+            StateHasChanged();
+        });
+
+    public Task OnUserJoined(UserJoined joined) =>
+        InvokeAsync(() =>
+        {
+            if (_disposed || joined.BoardId != Id || people.Any(person => person.UserId == joined.User.UserId))
+            {
+                return;
+            }
+
+            people = people
+                .Append(joined.User)
+                .OrderBy(person => person.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(person => person.UserId, StringComparer.Ordinal)
+                .ToList();
+            StateHasChanged();
+        });
+
+    public Task OnUserLeft(UserLeft left) =>
+        InvokeAsync(() =>
+        {
+            if (_disposed || left.BoardId != Id)
+            {
+                return;
+            }
+
+            var remaining = people.Where(person => person.UserId != left.UserId).ToList();
+
+            if (remaining.Count == people.Count)
+            {
+                return;
+            }
+
+            people = remaining;
             StateHasChanged();
         });
 
@@ -421,5 +474,11 @@ else
 
         var current = column.Cards.OrderBy(card => card.Order).Select(card => card.Id).ToList().IndexOf(cardId);
         return current == index;
+    }
+
+    private static string Initial(string name)
+    {
+        var trimmed = name.Trim();
+        return trimmed.Length == 0 ? "?" : char.ToUpperInvariant(trimmed[0]).ToString();
     }
 }

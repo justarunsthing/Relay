@@ -8,6 +8,7 @@ using Relay.Api.Boards;
 using Relay.Api.Cards;
 using Relay.Api.Data;
 using Relay.Api.Hubs;
+using Relay.Api.Presence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,6 +67,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<BoardBroadcaster>();
+builder.Services.AddSingleton<PresenceTracker>();
 builder.Services.AddBoardHandlers();
 builder.Services.AddCardHandlers();
 
