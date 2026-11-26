@@ -32,11 +32,12 @@ erDiagram
 
 `Column.BoardId` and `Card.ColumnId` are indexed. `CreatedAt` and `UpdatedAt` are `DateTimeOffset` in the entities.
 
-`ApplicationUser.Id` is the Identity string id. `Board.CreatedByUserId` stores that same string. There is no foreign key between them, so deleting a user does not delete boards.
+`ApplicationUser.Id` is the Identity string id. `Board.CreatedByUserId` and `Card.CreatedByUserId` store that same string. Neither is a foreign key, so deleting a user does not delete boards or cards.
 
 ```mermaid
 erDiagram
-    ApplicationUser ||--o{ Board : "user id stored on board"
+    ApplicationUser ||--o{ Board : "user id stored, no foreign key"
+    ApplicationUser ||--o{ Card : "user id stored, no foreign key"
 
     ApplicationUser {
         string Id PK

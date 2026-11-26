@@ -32,31 +32,55 @@ else if (board is null)
 }
 else
 {
-    <h1>@board.Name</h1>
+    <header class="board-bar">
+        <a class="brand" href="/">
+            <RelayMark />
+        </a>
+        <div class="board-title">
+            <h1>@board.Name</h1>
+            @if (people.Count > 0)
+            {
+                <p class="viewing">Viewing now: @string.Join(", ", people.Select(person => person.DisplayName))</p>
+            }
+        </div>
+        <div class="board-status">
+            @if (_reconnecting)
+            {
+                <span class="pill warn"><span class="dot" aria-hidden="true"></span> Reconnecting</span>
+            }
+            else if (_liveStopped || !string.IsNullOrEmpty(liveError))
+            {
+                <span class="pill stop"><span class="dot" aria-hidden="true"></span> Stopped</span>
+            }
+            else
+            {
+                <span class="pill live"><span class="dot" aria-hidden="true"></span> Live</span>
+            }
+            @if (people.Count > 0)
+            {
+                <ul class="avatars" aria-label="On this board">
+                    @foreach (var person in people)
+                    {
+                        <li>
+                            <span class="avatar" style="background:@AvatarColor(person.DisplayName)" title="@person.DisplayName">@Initial(person.DisplayName)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            <button type="button" class="black" @onclick="OpenAddFirst">Add card</button>
+        </div>
+    </header>
 
     @if (_reconnecting)
     {
-        <p class="banner" role="status">Reconnecting…</p>
+        <p class="banner warn" role="status">Reconnecting. You can still see the board; it will match the server when we are back.</p>
     }
-    else if (_liveStopped)
+    else if (_liveStopped || !string.IsNullOrEmpty(liveError))
     {
-        <p class="banner" role="status">Live updates stopped.</p>
-    }
-    @if (people.Count > 0)
-    {
-        <ul class="presence" aria-label="On this board">
-            @foreach (var person in people)
-            {
-                <li>
-                    <span class="avatar" aria-hidden="true">@Initial(person.DisplayName)</span>
-                    <span>@person.DisplayName</span>
-                </li>
-            }
-        </ul>
-    }
-    @if (!string.IsNullOrEmpty(liveError))
-    {
-        <p class="error" role="alert">@liveError</p>
+        <div class="banner stop" role="status">
+            <p>Live updates stopped. Changes by others will not appear until you reload.</p>
+            <button type="button" @onclick="ReloadBoard">Reload board</button>
+        </div>
     }
     @if (!string.IsNullOrEmpty(moveError))
     {
@@ -73,37 +97,35 @@ else
             <section class="column" data-column-id="@column.Id">
                 <div class="column-head">
                     <h2>@column.Title</h2>
-                    <button type="button" class="icon" aria-label="Add card" @onclick="() => OpenAdd(column.Id)">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 2.25a.75.75 0 0 1 .75.75v4.25H13a.75.75 0 0 1 0 1.5H8.75V13a.75.75 0 0 1-1.5 0V8.75H3a.75.75 0 0 1 0-1.5h4.25V3A.75.75 0 0 1 8 2.25"/></svg>
-                    </button>
+                    <span class="count">@column.Cards.Count</span>
                 </div>
                 <ol>
                     @foreach (var card in column.Cards.OrderBy(card => card.Order))
                     {
-                        <li class="card" draggable="true" data-card-id="@card.Id">
+                        <li class="card @(_fresh.Contains(card.Id) ? "fresh" : null)" draggable="true" data-card-id="@card.Id">
                             <div class="card-top">
                                 <h3>@card.Title</h3>
-                                <div class="card-tools">
-                                    <button type="button" class="icon" aria-label="Edit card" @onclick="() => OpenEdit(card)">
-                                        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M11.01 1.34a1.6 1.6 0 0 1 2.26 0l1.39 1.39a1.6 1.6 0 0 1 0 2.26L6.4 13.25a1.6 1.6 0 0 1-.72.42l-2.55.64a.75.75 0 0 1-.91-.91l.64-2.55c.08-.3.23-.57.42-.72l8.73-8.79zM12.2 2.4 3.9 10.7l-.35 1.4 1.4-.35 8.3-8.3-1.05-1.05z"/></svg>
-                                    </button>
-                                    <button type="button" class="icon" aria-label="Delete card" @onclick="() => OpenDelete(card)">
-                                        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6.25 1.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1 0-1.5zM2.5 4.25A.75.75 0 0 1 3.25 3.5h9.5a.75.75 0 0 1 0 1.5h-.28l-.62 7.4A1.75 1.75 0 0 1 10.11 14H5.89a1.75 1.75 0 0 1-1.74-1.6l-.62-7.4H3.25a.75.75 0 0 1-.75-.75z"/></svg>
-                                    </button>
-                                </div>
+                                <button type="button" class="icon" aria-label="Card actions for @card.Title" aria-haspopup="menu" aria-expanded="@(_menuId == card.Id)" @onclick="() => ToggleMenu(card.Id)">⋯</button>
                             </div>
                             @if (!string.IsNullOrWhiteSpace(card.Description))
                             {
                                 <p>@card.Description</p>
                             }
+                            <time datetime="@card.UpdatedAt.ToString("O")">@card.UpdatedAt.LocalDateTime.ToString("MMM d")</time>
+                            @if (_menuId == card.Id)
+                            {
+                                <div class="menu" role="menu" @onkeydown="OnMenuKey">
+                                    <button type="button" role="menuitem" @onclick="() => OpenEdit(card)">Edit</button>
+                                    <button type="button" role="menuitem" @onclick="() => OpenDelete(card)">Delete</button>
+                                    @foreach (var target in board.Columns.Where(item => item.Id != column.Id))
+                                    {
+                                        <button type="button" role="menuitem" @onclick="() => MoveTo(card, target.Id)">Move to @target.Title</button>
+                                    }
+                                </div>
+                            }
                         </li>
                     }
                 </ol>
-
-                @if (column.Cards.Count == 0)
-                {
-                    <p class="empty">No cards</p>
-                }
             </section>
         }
     </div>
@@ -116,6 +138,18 @@ else
                 @if (!string.IsNullOrEmpty(cardError))
                 {
                     <p class="error" role="alert">@cardError</p>
+                }
+                @if (_formCardId is null)
+                {
+                    <label>
+                        Column
+                        <select @bind="_formColumnId">
+                            @foreach (var column in board.Columns.OrderBy(column => column.Order))
+                            {
+                                <option value="@column.Id">@column.Title</option>
+                            }
+                        </select>
+                    </label>
                 }
                 <label>
                     Title
@@ -168,6 +202,9 @@ else
     private string _formDescription = "";
     private Guid? _deleteId;
     private string _deleteTitle = "";
+    private Guid? _menuId;
+    private readonly HashSet<Guid> _fresh = [];
+    private CancellationTokenSource? _freshCts;
     private bool _moveConfirmed;
     private bool _reconnecting;
     private bool _liveStopped;
@@ -346,6 +383,7 @@ else
                 return;
             }
 
+            MarkFresh(state);
             people = users;
             board = state;
             missing = false;
@@ -631,8 +669,104 @@ else
         }
     }
 
+    private void OpenAddFirst()
+    {
+        var columnId = board?.Columns.OrderBy(column => column.Order).FirstOrDefault()?.Id;
+        if (columnId is Guid id)
+        {
+            OpenAdd(id);
+        }
+    }
+
+    private void ToggleMenu(Guid cardId) => _menuId = _menuId == cardId ? null : cardId;
+
+    private void OnMenuKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            _menuId = null;
+        }
+    }
+
+    private Task MoveTo(CardResponse card, Guid columnId)
+    {
+        _menuId = null;
+        var index = board?.Columns.FirstOrDefault(column => column.Id == columnId)?.Cards.Count(item => item.Id != card.Id) ?? 0;
+        return OnCardDropped(card.Id.ToString(), columnId.ToString(), index);
+    }
+
+    private void ReloadBoard() => Nav.NavigateTo($"/boards/{Id}", forceLoad: true);
+
+    private void MarkFresh(BoardResponse next)
+    {
+        if (board is null)
+        {
+            return;
+        }
+
+        var previous = board.Columns
+            .SelectMany(column => column.Cards.Select(card => (card.Id, ColumnId: column.Id, card.Order)))
+            .ToDictionary(item => item.Id, item => (item.ColumnId, item.Order));
+
+        _fresh.Clear();
+        foreach (var column in next.Columns)
+        {
+            foreach (var card in column.Cards)
+            {
+                if (!previous.TryGetValue(card.Id, out var prior) || prior.ColumnId != column.Id || prior.Order != card.Order)
+                {
+                    _fresh.Add(card.Id);
+                }
+            }
+        }
+
+        if (_fresh.Count > 0)
+        {
+            _ = ClearFreshAsync();
+        }
+    }
+
+    private async Task ClearFreshAsync()
+    {
+        _freshCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _freshCts = cts;
+
+        try
+        {
+            await Task.Delay(1400, cts.Token);
+            _fresh.Clear();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private static string AvatarColor(string name)
+    {
+        var colors = new[] { "#0f766e", "#9a3412", "#6d28d9", "#1d4ed8", "#a16207" };
+        var hash = 0;
+        foreach (var letter in name.Trim().ToUpperInvariant())
+        {
+            hash = unchecked(hash * 31 + letter);
+        }
+
+        var index = hash % colors.Length;
+        if (index < 0)
+        {
+            index += colors.Length;
+        }
+
+        return colors[index];
+    }
+
     private void OpenAdd(Guid columnId)
     {
+        _menuId = null;
         _formColumnId = columnId;
         _formCardId = null;
         _formTitle = "";
@@ -649,6 +783,7 @@ else
             return;
         }
 
+        _menuId = null;
         _formColumnId = columnId;
         _formCardId = card.Id;
         _formTitle = card.Title;
@@ -678,6 +813,7 @@ else
 
     private void OpenDelete(CardResponse card)
     {
+        _menuId = null;
         CloseCardForm();
         _deleteId = card.Id;
         _deleteTitle = card.Title;

@@ -6,8 +6,14 @@
 
 <PageTitle>Create account</PageTitle>
 
-<section class="panel">
+<section class="auth">
+    <a class="brand" href="/">
+        <RelayMark />
+        <span>Relay</span>
+    </a>
+    <div class="panel">
     <h1>Create account</h1>
+    <p class="lede">A board is ready as soon as you sign in.</p>
     <form @onsubmit="Submit" @onsubmit:preventDefault="true">
         <label>
             Display name
@@ -28,6 +34,7 @@
         }
         <button type="submit" disabled="@busy">Create account</button>
     </form>
+    </div>
     <p class="aside">Already registered? <a href="/login">Sign in</a></p>
 </section>
 

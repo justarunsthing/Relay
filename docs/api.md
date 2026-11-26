@@ -2,6 +2,18 @@
 
 The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/boards`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. The board page opens the SignalR hub at `/hubs/board` with that same token. `GET /health` returns 200 and does not touch the database.
 
+`/` is public. `/boards` and `/boards/{id}` require a signed-in user. A signed-out visit to either is sent to `/login` with that path as the return URL. After login the user continues there. Register sends a new user to the board list. Sign out returns to the overview.
+
+```mermaid
+flowchart TD
+    visit[Open a path] --> kind{Public overview}
+    kind -->|yes| landing[Show the landing page]
+    kind -->|no| auth{Signed in}
+    auth -->|yes| page[Show the board list or the board]
+    auth -->|no| login[Login and return to that path]
+    login --> page
+```
+
 ```mermaid
 flowchart LR
     browser[Browser] --> host[Relay.Api]
@@ -70,7 +82,30 @@ Every card route requires a signed-in user. Handlers live in `src/Relay.Api/Card
 
 Title is required, trimmed, and at most 120 characters. Description is optional, trimmed, and at most 2000 characters. A blank description is stored as null. A missing card, board, or column is 404. A column on a different board is 400.
 
-A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page adds a card from the plus icon on a column, and edits or deletes a card from the icons on it. Each of those opens a dialog. A drop moves the card locally first, then replaces the affected cards with those orders. A failed move restores the snapshot from before the drop and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`, and every open board page applies it.
+A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page adds a card from the Add card button, which asks which column receives it. Each card has an actions menu for edit, delete, and move to another column. Edit and delete open a dialog. Cancel, the backdrop, or Escape closes it without a write. A successful write closes the dialog. The page applies the response only when no newer `BoardState` has arrived, and the group event that follows is safe to apply again. A failed write leaves the dialog open and shows the error.
+
+```mermaid
+flowchart TD
+    icon[Plus pencil or trash] --> dialog[Open the dialog]
+    dialog --> choice{Submitted}
+    choice -->|no| closed[Close without a write]
+    choice -->|yes| write{Write succeeded}
+    write -->|yes| saved[Close the dialog and update the column]
+    write -->|no| stay[Keep the dialog and show the error]
+```
+
+```mermaid
+sequenceDiagram
+    participant Page
+    participant Handler as Card handler
+    participant Other
+    Page->>Handler: Create update or delete
+    Handler-->>Page: Saved card or 204
+    Handler-->>Page: Card event on the board group
+    Handler-->>Other: Card event on the board group
+```
+
+A drop moves the card locally first, then replaces the affected cards with those orders. A failed move restores the snapshot from before the drop and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`, and every open board page applies it.
 
 ```mermaid
 flowchart TD
@@ -100,7 +135,17 @@ flowchart TD
 
 `JoinBoard` loads the board. A missing board is rejected and the connection is not added to a group. Otherwise the hub sends `BoardState` to that caller, then adds the connection to `board-{boardId}`. Card events arrive after that snapshot. `BoardState` is the board, its columns, and its cards in order, the same shape as `GET /api/boards/{id}`, plus the people already on the board. A person is one user, however many tabs they have open. `UserJoined` goes to the others only when this is that user's first connection. `LeaveBoard` removes the connection from that group. `UserLeft` goes out only when it was their last connection. If the client disconnects without calling `LeaveBoard`, `OnDisconnectedAsync` uses that same leave path.
 
-The board page connects when `/boards/{id}` opens. `AccessTokenProvider` returns the JWT stored under `relay.token`. The page applies `BoardState`, then applies `CardAdded`, `CardUpdated`, `CardDeleted`, `CardMoved`, `UserJoined`, and `UserLeft` as they arrive. `CardMoved` uses the same reindexed orders as the move response. The page lists the display name of each person on the board. The connection uses automatic reconnect. While it is down, the page shows a reconnecting banner and leaves the columns in place. When the connection returns, the page calls `JoinBoard` again and replaces the columns, cards, and people with that `BoardState`. Closing the page calls `LeaveBoard`.
+The board page connects when `/boards/{id}` opens. `AccessTokenProvider` returns the JWT stored under `relay.token`. The page applies `BoardState`, then applies `CardAdded`, `CardUpdated`, `CardDeleted`, `CardMoved`, `UserJoined`, and `UserLeft` as they arrive. `CardMoved` uses the same reindexed orders as the move response. The page lists the display name of each person on the board. The connection uses automatic reconnect. While it is down, the page shows a reconnecting banner and leaves the columns in place. When the connection returns, the page calls `JoinBoard` again and replaces the columns, cards, and people with that `BoardState`, then hides the banner. If the retries end, the banner says live updates stopped. Closing the page calls `LeaveBoard` only while the connection is still open.
+
+```mermaid
+sequenceDiagram
+    participant Page
+    participant Hub
+    Note over Page: Connection drops, columns stay, banner shows
+    Page->>Hub: JoinBoard once the connection returns
+    Hub-->>Page: BoardState
+    Note over Page: Replace columns cards and people, then hide the banner
+```
 
 | Event | Who receives it | Payload |
 | --- | --- | --- |
@@ -117,12 +162,10 @@ sequenceDiagram
     participant Page
     participant Hub
     participant Other
-    participant Writer as Card handler
     Page->>Hub: JoinBoard
     Hub-->>Page: BoardState
-    Hub-->>Other: UserJoined
-    Writer->>Hub: CardMoved
-    Hub-->>Page: CardMoved
+    Note over Hub: The connection joins the group after that snapshot
+    Hub-->>Other: UserJoined on the first connection for this user
 ```
 
 ```mermaid

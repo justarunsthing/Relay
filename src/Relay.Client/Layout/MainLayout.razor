@@ -1,25 +1,29 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @inject Relay.Client.Auth.RelayAuthenticationStateProvider Auth
 @inject NavigationManager Navigation
 
 <div class="shell">
-    <header class="topbar">
-        <a class="brand" href="/">
-            <img src="img/ap-mark.png" alt="" width="32" height="32" />
-            <span>Relay</span>
-        </a>
-        <AuthorizeView>
-            <Authorized>
-                <a href="/boards">Boards</a>
-                <span class="who">@context.User.Identity?.Name</span>
-                <button type="button" class="ghost" @onclick="SignOut">Sign out</button>
-            </Authorized>
-            <NotAuthorized>
-                <a href="/login?returnUrl=/boards">Sign in</a>
-            </NotAuthorized>
-        </AuthorizeView>
-    </header>
+    @if (!HideTopbar)
+    {
+        <header class="topbar">
+            <a class="brand" href="/">
+                <RelayMark />
+                <span>Relay</span>
+            </a>
+            <AuthorizeView>
+                <Authorized>
+                    <span class="who">@context.User.Identity?.Name</span>
+                    <button type="button" class="quiet" @onclick="SignOut">Sign out</button>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/login?returnUrl=/boards">Sign in</a>
+                    <a class="button black" href="/register">Create account</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </header>
+    }
 
     <main class="page">
         @Body
@@ -46,9 +50,21 @@
 </div>
 
 @code {
+    private bool HideTopbar => Path is "login" or "register" || IsBoard;
+
+    private bool IsBoard => Path.StartsWith("boards/", StringComparison.Ordinal) && Guid.TryParse(Path["boards/".Length..], out _);
+
+    private string Path => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
+
     private async Task SignOut()
     {
         await Auth.SignOutAsync();
         Navigation.NavigateTo("/");
     }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
 }

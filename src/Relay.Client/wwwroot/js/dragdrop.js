@@ -2,7 +2,7 @@
 let dotNetRef = null;
 let draggedId = null;
 let draggedCard = null;
-let highlighted = null;
+let dragImage = null;
 
 window.relayDrag = {
     start(ref) {
@@ -41,8 +41,16 @@ function onDragStart(event) {
     draggedId = card.dataset.cardId;
     draggedCard = card;
     card.classList.add("dragging");
+    dragImage = card.cloneNode(true);
+    dragImage.classList.add("drag-image");
+    dragImage.style.position = "absolute";
+    dragImage.style.top = "-1000px";
+    dragImage.style.left = "0";
+    dragImage.style.width = card.offsetWidth + "px";
+    document.body.appendChild(dragImage);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", draggedId);
+    event.dataTransfer.setDragImage(dragImage, event.offsetX, event.offsetY);
 }
 
 function onDragOver(event) {
@@ -53,11 +61,7 @@ function onDragOver(event) {
 
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    if (highlighted !== column) {
-        highlighted?.classList.remove("drop-target");
-        column.classList.add("drop-target");
-        highlighted = column;
-    }
+    placeSlot(column, event.clientY, draggedId);
 }
 
 async function onDrop(event) {
@@ -110,11 +114,42 @@ function elementFrom(target) {
     return target?.parentElement ?? null;
 }
 
+function placeSlot(column, clientY, cardId) {
+    const list = column.querySelector("ol");
+    if (!list) {
+        return;
+    }
+
+    let slot = document.querySelector(".drop-slot");
+    if (!slot) {
+        slot = document.createElement("li");
+        slot.className = "drop-slot";
+        slot.setAttribute("aria-hidden", "true");
+    }
+
+    const cards = [...list.querySelectorAll("[data-card-id]")].filter(card => card.dataset.cardId !== cardId);
+    let before = null;
+    for (const card of cards) {
+        const rect = card.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+            before = card;
+            break;
+        }
+    }
+
+    if (before) {
+        list.insertBefore(slot, before);
+    } else {
+        list.appendChild(slot);
+    }
+}
+
 function clearDrag() {
     draggedCard?.classList.remove("dragging");
-    highlighted?.classList.remove("drop-target");
+    document.querySelector(".drop-slot")?.remove();
+    dragImage?.remove();
     draggedId = null;
     draggedCard = null;
-    highlighted = null;
+    dragImage = null;
 }
 })();

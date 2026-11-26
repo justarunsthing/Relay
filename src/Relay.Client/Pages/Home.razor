@@ -5,16 +5,11 @@
 
 <PageTitle>Boards</PageTitle>
 
-<h1>Boards</h1>
-
-<form class="create" @onsubmit="Create" @onsubmit:preventDefault="true">
-    <label>
-        New board
-        <input @bind="name" @bind:event="oninput" maxlength="80" required />
-    </label>
-    <button type="submit" disabled="@creating">Create</button>
-</form>
-@if (!string.IsNullOrEmpty(error))
+<div class="list-head">
+    <h1>Your boards</h1>
+    <button type="button" @onclick="OpenCreate">New board</button>
+</div>
+@if (!string.IsNullOrEmpty(error) && !creatingOpen)
 {
     <p class="error" role="alert">@error</p>
 }
@@ -29,15 +24,39 @@ else if (boards.Count == 0)
 }
 else
 {
-    <ul class="board-list">
+    <ul class="board-grid">
         @foreach (var board in boards)
         {
             <li>
-                <a href="@($"/boards/{board.Id}")">@board.Name</a>
-                <time datetime="@board.CreatedAt.ToString("O")">@board.CreatedAt.LocalDateTime.ToString("MMM d, yyyy")</time>
+                <a href="@($"/boards/{board.Id}")">
+                    <span class="mini-lanes" aria-hidden="true"><span></span><span></span><span></span></span>
+                    <span class="board-name">@board.Name</span>
+                    <time datetime="@board.CreatedAt.ToString("O")">Created @board.CreatedAt.LocalDateTime.ToString("MMM d, yyyy")</time>
+                </a>
             </li>
         }
     </ul>
+}
+
+@if (creatingOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseCreate">
+        <form class="modal" role="dialog" aria-modal="true" aria-labelledby="new-board-title" @onclick:stopPropagation="true" @onkeydown="OnDialogKey" @onsubmit="Create" @onsubmit:preventDefault="true">
+            <h2 id="new-board-title">New board</h2>
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <p class="error" role="alert">@error</p>
+            }
+            <label>
+                Board title
+                <input @bind="name" @bind:event="oninput" maxlength="80" required autofocus />
+            </label>
+            <div class="modal-actions">
+                <button type="button" class="quiet" @onclick="CloseCreate" disabled="@creating">Cancel</button>
+                <button type="submit" disabled="@creating">Create board</button>
+            </div>
+        </form>
+    </div>
 }
 
 @code {
@@ -45,6 +64,7 @@ else
     private string name = string.Empty;
     private string? error;
     private bool creating;
+    private bool creatingOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -54,6 +74,30 @@ else
     private async Task LoadAsync()
     {
         boards = await Http.GetFromJsonAsync<List<BoardSummaryResponse>>("api/boards");
+    }
+
+    private void OpenCreate()
+    {
+        error = null;
+        name = string.Empty;
+        creatingOpen = true;
+    }
+
+    private void CloseCreate()
+    {
+        if (!creating)
+        {
+            creatingOpen = false;
+            error = null;
+        }
+    }
+
+    private void OnDialogKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            CloseCreate();
+        }
     }
 
     private async Task Create()
@@ -71,6 +115,7 @@ else
             }
 
             name = string.Empty;
+            creatingOpen = false;
             await LoadAsync();
         }
         finally
