@@ -12,7 +12,7 @@ dotnet user-secrets --project src/Relay.Api set "Jwt:Key" "a string of at least 
 dotnet run --project src/Relay.Api --launch-profile http
 ```
 
-The http profile listens on `http://localhost:5034`. In Development that start applies pending migrations, including on a new machine that already has those secrets. Production does not migrate on startup.
+The http profile listens on `http://localhost:5034`. `/` is a public overview. Signed-in boards live at `/boards`. In Development that start applies pending migrations, including on a new machine that already has those secrets. Production does not migrate on startup.
 
 Register two users. One creates a board and opens it. The other opens the same `/boards/{id}`. Drag a card and confirm the other screen updates. Both display names show under the title. Two tabs for one user count as one person. Refresh the page. Drop the network and bring it back: the board stays on screen under a reconnecting banner, then matches the server again.
 

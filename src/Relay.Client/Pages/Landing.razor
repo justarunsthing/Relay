@@ -1,0 +1,40 @@
+@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@using Microsoft.AspNetCore.Components.Authorization
+
+<PageTitle>Relay</PageTitle>
+
+<section class="hero">
+    <h1>Real-time collaborative board</h1>
+    <p class="lede">
+        Blazor WebAssembly + ASP.NET Core SignalR + PostgreSQL.
+        Sign in, open a board, and drag a card.
+        Everyone with the link sees the same columns, the same order, and who else is here.
+    </p>
+    <div class="hero-actions">
+        <AuthorizeView>
+            <Authorized>
+                <a class="button" href="/boards">Your boards</a>
+            </Authorized>
+            <NotAuthorized>
+                <a class="button" href="/login?returnUrl=/boards">Sign in</a>
+                <a class="button quiet" href="/register">Create an account</a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</section>
+
+<section class="overview" aria-label="What Relay does">
+    <article>
+        <h2>One link is enough</h2>
+        <p>Any signed-in person with the board link can view it and change it. There is no separate member list.</p>
+    </article>
+    <article>
+        <h2>Changes show up live</h2>
+        <p>Add, edit, delete, or drag a card and the other open boards follow. Two tabs for the same person count as one.</p>
+    </article>
+    <article>
+        <h2>It catches up</h2>
+        <p>If the connection drops, the columns stay on screen. When it returns, the board matches the server again.</p>
+    </article>
+</section>

@@ -44,7 +44,7 @@ The move response returns the absolute orders. `CardMoved` broadcasts that same 
 
 `RegisterRequest`, `LoginResponse`, `UserResponse`, `CreateBoardRequest`, `MoveCardRequest`, the board response records, and the hub payloads `CardAdded`, `CardUpdated`, and `CardDeleted` live in `Relay.Shared`. `CardMoved` reuses `MoveCardResponse`. The Blazor client serializes those same shapes. `docs/data-model.md` is the entity diagram for the board tables.
 
-The client stores the JWT in `localStorage` under `relay.token` and attaches it as a bearer token. A signed-out visit to `/` or `/boards/{id}` goes to `/login` with a return URL.
+The client stores the JWT in `localStorage` under `relay.token` and attaches it as a bearer token. `/` is a public overview. A signed-out visit to `/boards` or `/boards/{id}` goes to `/login` with a return URL.
 
 ## The hub broadcasts after a successful card write
 

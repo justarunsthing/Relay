@@ -27,8 +27,14 @@ window.relayDrag = {
 };
 
 function onDragStart(event) {
-    const card = elementFrom(event.target)?.closest("[data-card-id]");
+    const target = elementFrom(event.target);
+    const card = target?.closest("[data-card-id]");
     if (!card || !card.closest("[data-board]")) {
+        return;
+    }
+
+    if (target?.closest("button, input, textarea, a, form")) {
+        event.preventDefault();
         return;
     }
 

@@ -1,6 +1,6 @@
 # API
 
-The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. The board page opens the SignalR hub at `/hubs/board` with that same token. `GET /health` returns 200 and does not touch the database.
+The API is the ASP.NET Core host in `src/Relay.Api`. In Development it listens on `http://localhost:5034`. One `dotnet run` also serves the Blazor client: `/`, `/boards`, `/login`, `/register`, and `/boards/{id}` fall back to `index.html`. Protected routes expect `Authorization: Bearer <token>`. The client keeps that token in `localStorage` under `relay.token`. The board page opens the SignalR hub at `/hubs/board` with that same token. `GET /health` returns 200 and does not touch the database.
 
 ```mermaid
 flowchart LR
@@ -70,7 +70,7 @@ Every card route requires a signed-in user. Handlers live in `src/Relay.Api/Card
 
 Title is required, trimmed, and at most 120 characters. Description is optional, trimmed, and at most 2000 characters. A blank description is stored as null. A missing card, board, or column is 404. A column on a different board is 400.
 
-A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page moves the card locally first, then replaces the affected cards with those orders. A failed move restores the snapshot from before the drop and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`, and every open board page applies it.
+A move removes the card from its current order, inserts it at `order` clamped into the target column, then rewrites both columns to `0..n-1`. Moving inside one column rewrites that column only. The response lists every card in the affected columns: `cardId`, `fromColumnId`, `toColumnId`, and `orders`. The board page adds a card from the plus icon on a column, and edits or deletes a card from the icons on it. Each of those opens a dialog. A drop moves the card locally first, then replaces the affected cards with those orders. A failed move restores the snapshot from before the drop and broadcasts nothing. A successful move broadcasts that same response as `CardMoved`, and every open board page applies it.
 
 ```mermaid
 flowchart TD

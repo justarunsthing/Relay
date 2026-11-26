@@ -62,17 +62,36 @@ else
     {
         <p class="error" role="alert">@moveError</p>
     }
+    @if (!string.IsNullOrEmpty(cardError) && _formColumnId is null && _deleteId is null)
+    {
+        <p class="error" role="alert">@cardError</p>
+    }
 
     <div class="columns" data-board aria-busy="@_moving">
         @foreach (var column in board.Columns.OrderBy(column => column.Order))
         {
             <section class="column" data-column-id="@column.Id">
-                <h2>@column.Title</h2>
+                <div class="column-head">
+                    <h2>@column.Title</h2>
+                    <button type="button" class="icon" aria-label="Add card" @onclick="() => OpenAdd(column.Id)">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 2.25a.75.75 0 0 1 .75.75v4.25H13a.75.75 0 0 1 0 1.5H8.75V13a.75.75 0 0 1-1.5 0V8.75H3a.75.75 0 0 1 0-1.5h4.25V3A.75.75 0 0 1 8 2.25"/></svg>
+                    </button>
+                </div>
                 <ol>
                     @foreach (var card in column.Cards.OrderBy(card => card.Order))
                     {
                         <li class="card" draggable="true" data-card-id="@card.Id">
-                            <h3>@card.Title</h3>
+                            <div class="card-top">
+                                <h3>@card.Title</h3>
+                                <div class="card-tools">
+                                    <button type="button" class="icon" aria-label="Edit card" @onclick="() => OpenEdit(card)">
+                                        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M11.01 1.34a1.6 1.6 0 0 1 2.26 0l1.39 1.39a1.6 1.6 0 0 1 0 2.26L6.4 13.25a1.6 1.6 0 0 1-.72.42l-2.55.64a.75.75 0 0 1-.91-.91l.64-2.55c.08-.3.23-.57.42-.72l8.73-8.79zM12.2 2.4 3.9 10.7l-.35 1.4 1.4-.35 8.3-8.3-1.05-1.05z"/></svg>
+                                    </button>
+                                    <button type="button" class="icon" aria-label="Delete card" @onclick="() => OpenDelete(card)">
+                                        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6.25 1.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1 0-1.5zM2.5 4.25A.75.75 0 0 1 3.25 3.5h9.5a.75.75 0 0 1 0 1.5h-.28l-.62 7.4A1.75 1.75 0 0 1 10.11 14H5.89a1.75 1.75 0 0 1-1.74-1.6l-.62-7.4H3.25a.75.75 0 0 1-.75-.75z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
                             @if (!string.IsNullOrWhiteSpace(card.Description))
                             {
                                 <p>@card.Description</p>
@@ -88,6 +107,49 @@ else
             </section>
         }
     </div>
+
+    @if (_formColumnId is Guid formColumnId)
+    {
+        <div class="modal-backdrop" @onclick="CloseCardForm">
+            <form class="modal" role="dialog" aria-modal="true" aria-labelledby="card-dialog-title" @onclick:stopPropagation="true" @onkeydown="OnDialogKey" @onsubmit="() => SubmitCardForm(formColumnId)" @onsubmit:preventDefault="true">
+                <h2 id="card-dialog-title">@(_formCardId is null ? "New card" : "Edit card")</h2>
+                @if (!string.IsNullOrEmpty(cardError))
+                {
+                    <p class="error" role="alert">@cardError</p>
+                }
+                <label>
+                    Title
+                    <input @bind="_formTitle" @bind:event="oninput" maxlength="120" required autofocus />
+                </label>
+                <label>
+                    Description
+                    <textarea @bind="_formDescription" @bind:event="oninput" maxlength="2000"></textarea>
+                </label>
+                <div class="modal-actions">
+                    <button type="button" class="quiet" @onclick="CloseCardForm" disabled="@_saving">Cancel</button>
+                    <button type="submit" disabled="@_saving">@(_formCardId is null ? "Add card" : "Save")</button>
+                </div>
+            </form>
+        </div>
+    }
+
+    @if (_deleteId is Guid deleteId)
+    {
+        <div class="modal-backdrop" @onclick="CloseDelete">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" @onclick:stopPropagation="true" @onkeydown="OnDialogKey">
+                <h2 id="delete-dialog-title">Delete this card?</h2>
+                @if (!string.IsNullOrEmpty(cardError))
+                {
+                    <p class="error" role="alert">@cardError</p>
+                }
+                <p class="modal-copy">@_deleteTitle</p>
+                <div class="modal-actions">
+                    <button type="button" class="quiet" @onclick="CloseDelete" disabled="@_saving" autofocus>Cancel</button>
+                    <button type="button" class="danger" @onclick="() => DeleteCard(deleteId)" disabled="@_saving">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -96,8 +158,16 @@ else
     private string? loadError;
     private string? liveError;
     private string? moveError;
+    private string? cardError;
     private IReadOnlyList<BoardUser> people = [];
     private bool _moving;
+    private bool _saving;
+    private Guid? _formColumnId;
+    private Guid? _formCardId;
+    private string _formTitle = "";
+    private string _formDescription = "";
+    private Guid? _deleteId;
+    private string _deleteTitle = "";
     private bool _moveConfirmed;
     private bool _reconnecting;
     private bool _liveStopped;
@@ -129,6 +199,10 @@ else
         loadError = null;
         liveError = null;
         moveError = null;
+        cardError = null;
+        _formColumnId = null;
+        _formCardId = null;
+        _deleteId = null;
         _reconnecting = false;
         _liveStopped = false;
         people = [];
@@ -492,6 +566,253 @@ else
 
         _self?.Dispose();
         _self = null;
+    }
+
+    private async Task AddCard(Guid columnId)
+    {
+        if (_saving || _disposed || board is null)
+        {
+            return;
+        }
+
+        var title = _formTitle;
+        var description = _formDescription;
+        var stamp = _serverStamp;
+        _saving = true;
+        cardError = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                $"api/boards/{Id}/cards",
+                new { columnId, title, description });
+
+            if (_disposed || _loadedId != Id)
+            {
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                cardError = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            var card = await response.Content.ReadFromJsonAsync<CardResponse>();
+
+            if (card is null)
+            {
+                cardError = "The card could not be added.";
+                return;
+            }
+
+            if (stamp == _serverStamp)
+            {
+                ApplyCard(current => BoardView.Add(current, new CardAdded(current.Id, columnId, card)));
+            }
+
+            CloseCardForm();
+        }
+        catch (HttpRequestException)
+        {
+            if (!_disposed && _loadedId == Id)
+            {
+                cardError = "The card could not be added.";
+            }
+        }
+        finally
+        {
+            _saving = false;
+
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void OpenAdd(Guid columnId)
+    {
+        _formColumnId = columnId;
+        _formCardId = null;
+        _formTitle = "";
+        _formDescription = "";
+        _deleteId = null;
+        cardError = null;
+    }
+
+    private void OpenEdit(CardResponse card)
+    {
+        var columnId = board?.Columns.FirstOrDefault(column => column.Cards.Any(item => item.Id == card.Id))?.Id;
+        if (columnId is null)
+        {
+            return;
+        }
+
+        _formColumnId = columnId;
+        _formCardId = card.Id;
+        _formTitle = card.Title;
+        _formDescription = card.Description ?? "";
+        _deleteId = null;
+        cardError = null;
+    }
+
+    private void CloseCardForm()
+    {
+        _formColumnId = null;
+        _formCardId = null;
+        cardError = null;
+    }
+
+    private async Task SubmitCardForm(Guid columnId)
+    {
+        if (_formCardId is null)
+        {
+            await AddCard(columnId);
+        }
+        else
+        {
+            await SaveCard();
+        }
+    }
+
+    private void OpenDelete(CardResponse card)
+    {
+        CloseCardForm();
+        _deleteId = card.Id;
+        _deleteTitle = card.Title;
+        cardError = null;
+    }
+
+    private void CloseDelete() => _deleteId = null;
+
+    private void OnDialogKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape" && !_saving)
+        {
+            CloseCardForm();
+            CloseDelete();
+        }
+    }
+
+    private async Task SaveCard()
+    {
+        if (_saving || _disposed || board is null || _formCardId is null)
+        {
+            return;
+        }
+
+        var cardId = _formCardId.Value;
+        var stamp = _serverStamp;
+        _saving = true;
+        cardError = null;
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync(
+                $"api/cards/{cardId}",
+                new { title = _formTitle, description = _formDescription });
+
+            if (_disposed || _loadedId != Id)
+            {
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                cardError = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            var card = await response.Content.ReadFromJsonAsync<CardResponse>();
+            var columnId = board.Columns.FirstOrDefault(column => column.Cards.Any(item => item.Id == cardId))?.Id;
+
+            if (card is null || columnId is null)
+            {
+                cardError = "The card could not be saved.";
+                return;
+            }
+
+            if (stamp == _serverStamp)
+            {
+                ApplyCard(current => BoardView.Update(current, new CardUpdated(current.Id, columnId.Value, card)));
+            }
+
+            CloseCardForm();
+        }
+        catch (HttpRequestException)
+        {
+            if (!_disposed && _loadedId == Id)
+            {
+                cardError = "The card could not be saved.";
+            }
+        }
+        finally
+        {
+            _saving = false;
+
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task DeleteCard(Guid cardId)
+    {
+        if (_saving || _disposed || board is null)
+        {
+            return;
+        }
+
+        var stamp = _serverStamp;
+        var column = board.Columns.FirstOrDefault(item => item.Cards.Any(card => card.Id == cardId));
+        _saving = true;
+        cardError = null;
+
+        try
+        {
+            var response = await Http.DeleteAsync($"api/cards/{cardId}");
+
+            if (_disposed || _loadedId != Id)
+            {
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                cardError = await Relay.Client.Auth.ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            if (stamp == _serverStamp && column is not null)
+            {
+                var orders = column.Cards
+                    .Where(card => card.Id != cardId)
+                    .OrderBy(card => card.Order)
+                    .Select((card, index) => new CardOrderResponse(card.Id, column.Id, index))
+                    .ToList();
+                ApplyCard(current => BoardView.Delete(current, new CardDeleted(current.Id, column.Id, cardId, orders)));
+            }
+
+            CloseDelete();
+        }
+        catch (HttpRequestException)
+        {
+            if (!_disposed && _loadedId == Id)
+            {
+                cardError = "The card could not be deleted.";
+            }
+        }
+        finally
+        {
+            _saving = false;
+
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
     }
 
     private static bool AlreadyThere(BoardResponse board, Guid cardId, Guid columnId, int index)

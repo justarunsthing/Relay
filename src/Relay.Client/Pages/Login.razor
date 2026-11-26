@@ -74,7 +74,7 @@
     {
         if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//"))
         {
-            return "/";
+            return "/boards";
         }
 
         return returnUrl;
